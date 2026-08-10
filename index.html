@@ -4,6 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>梦音传讯 · 字卡之约</title>
+<meta name="theme-color" content="#c49a8c">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="梦音传讯">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<script>if('serviceWorker'in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('./sw.js').catch(function(){})})}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=Noto+Serif+SC:wght@400;700&display=swap" rel="stylesheet">
 <style>
@@ -352,6 +361,16 @@ button,input,select,textarea,.tab,.tool-strip,.tool-strip button,.header .action
   .call-overlay.full .call-actions{gap:12px}
   .call-overlay.mini{width:min(46vw,150px)}
   .call-overlay.mini .call-btn{width:34px;height:34px}
+  /* 表情框：手机端改为键盘位置的下拉板，聊天与输入框保持可见可点 */
+  #emojiPanel{background:rgba(0,0,0,.12);align-items:flex-end;justify-content:center;pointer-events:none}
+  #emojiPanel.show{display:flex}
+  #emojiPanel .modal{pointer-events:auto;position:fixed;left:0;right:0;bottom:calc(var(--input-h) + env(safe-area-inset-bottom));width:100%;max-width:none;max-height:38vh;margin:0;padding:10px 12px 14px;border-radius:16px 16px 0 0;box-shadow:0 -6px 24px rgba(0,0,0,.14)}
+  #emojiPanel .modal h2{display:none}
+  #emojiPanel .modal .close-btn{position:static;float:none}
+  #emojiPanel .modal .tab-bar{justify-content:space-between;margin-bottom:8px}
+  #emojiPickRow{display:flex!important}
+  #emojiPanel .emoji-grid{grid-template-columns:repeat(auto-fill,minmax(42px,1fr));gap:4px}
+  #emojiPanel .kaomoji-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:4px}
 }
 @keyframes flashHit{0%{background:rgba(255,215,105,.6);box-shadow:0 0 0 4px rgba(255,215,105,.35)}100%{background:transparent;box-shadow:none}}
 .msg.search-flash{animation:flashHit 1.8s ease-out}
@@ -492,7 +511,7 @@ button,input,select,textarea,.tab,.tool-strip,.tool-strip button,.header .action
         <button class="extra-btn" onclick="openDrawingModal()" title="AI绘画描述">🎨</button>
         <button class="extra-btn" onclick="openMoreModal()" title="更多">➕</button>
         <div style="position:relative;flex:1">
-          <textarea id="msgInput" rows="1" placeholder="说点什么，让对话开始吧..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage();}" oninput="onMsgInput(this);autoResizeInput(this)"></textarea>
+          <textarea id="msgInput" rows="1" placeholder="说点什么，让对话开始吧..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage();}" oninput="onMsgInput(this);autoResizeInput(this)" onfocus="if(window.innerWidth<=700){closeModal('emojiPanel')}"></textarea>
           <div id="mentionDropdown" style="display:none;position:absolute;bottom:100%;left:0;background:var(--surface);border:2px solid #e8ddd5;border-radius:10px;padding:4px;max-height:180px;overflow-y:auto;z-index:100;min-width:120px;box-shadow:0 4px 16px rgba(0,0,0,.1)"></div>
         </div>
         <button onclick="sendMessage()" style="background:var(--primary);border:none;color:#fff;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:1.1em;flex-shrink:0;transition:background .3s" title="发送">➤</button>
@@ -505,6 +524,11 @@ button,input,select,textarea,.tab,.tool-strip,.tool-strip button,.header .action
 <div class="modal-overlay" id="emojiPanel">
   <div class="modal" style="max-width:500px">
     <button class="close-btn" onclick="closeModal('emojiPanel')">✕</button>
+    <div id="emojiPickRow" style="display:none;align-items:center;gap:6px;font-size:.8em;color:var(--text2);margin-bottom:6px">
+      <span>已选 <b id="emojiPickCount" style="color:var(--primary);font-size:1.05em">0</b> 个 表情/颜文字</span>
+      <span style="flex:1"></span>
+      <span style="font-size:.72em;color:#b8a99f">轻点上方输入框，可边看消息边打字</span>
+    </div>
     <h2>😊 表情 &amp; 颜文字</h2>
     <div class="tab-bar" style="flex-wrap:wrap">
       <div class="tab active" onclick="switchEmojiTab(this,'emojiTab')">😊 表情</div>
@@ -879,6 +903,10 @@ button,input,select,textarea,.tab,.tool-strip,.tool-strip button,.header .action
         <button class="btn btn-sm btn-secondary" onclick="document.getElementById('chatappImportFile').click()" style="background:#c49a8c;color:#fff">📱 导入ChatApp备份</button>
         <input type="file" id="chatappImportFile" accept=".json" style="display:none" onchange="importChatAppBackup(event)">
       </div>
+      <div class="btn-row" style="margin-bottom:12px">
+        <button class="btn btn-sm btn-secondary" onclick="copyConvDiag()">🔍 对话诊断（复制会话结构）</button>
+      </div>
+      <div style="font-size:.72em;color:var(--text2);margin-bottom:12px">微信里导出会被拦截下载时，用上面按钮把会话结构复制出来发给我诊断即可（只含结构不含完整聊天）。</div>
 
       <label id="sync1" style="color:var(--primary)">☁️ 配置备份与同步（不含聊天记录）</label>
       <div style="font-size:.72em;color:var(--text2);margin-bottom:6px">字卡、分组、自定义表情、自定义回复、音乐、角色设置等（聊天记录各设备独立，不包含在内）。在电脑上导出→传到手机→手机上导入即可完成同步。</div>
@@ -2769,6 +2797,8 @@ function sendMessage() {
   addMessage('me', text, false);
   input.value = '';
   input.style.height = '';
+  _emojiPick = 0;
+  refreshEmojiPick();
   clearReplyTo();
   document.getElementById('mentionDropdown').style.display = 'none';
   simulateReply(mentionedIds);
@@ -3993,10 +4023,21 @@ function renderKaomojis() {
   grid.innerHTML = all.map(k => `<div class="kaomoji-item" onclick="insertEmoji('${k.replace(/'/g,"\\'")}')">${escapeHtml(k)}</div>`).join('');
 }
 
+var _emojiPick = 0;
+var _emojiPickTimeout = null;
+function refreshEmojiPick() {
+  const el = document.getElementById('emojiPickCount');
+  if (!el) return;
+  el.textContent = _emojiPick;
+  const row = document.getElementById('emojiPickRow');
+  if (row) row.style.display = (_emojiPick > 0 && window.innerWidth <= 700) ? 'flex' : 'none';
+}
 function insertEmoji(emoji) {
   const input = document.getElementById('msgInput');
   input.value += emoji;
-  input.focus();
+  _emojiPick++;
+  refreshEmojiPick();
+  if (window.innerWidth > 700) input.focus();
 }
 function insertEmojiImage(idx) {
   const images = state.userEmojiImages || [];
@@ -4005,7 +4046,9 @@ function insertEmojiImage(idx) {
   const src = (img.id !== undefined && img.id !== null) ? 'emoji://' + img.id : img.url;
   const input = document.getElementById('msgInput');
   input.value += '<img src="' + src + '" style="max-width:150px;max-height:150px;display:block" alt="表情图片">';
-  input.focus();
+  _emojiPick++;
+  refreshEmojiPick();
+  if (window.innerWidth > 700) input.focus();
 }
 
 function toggleEmojiPanel() {
@@ -4013,7 +4056,13 @@ function toggleEmojiPanel() {
     showToast('你已在设置中关闭表情包使用');
     return;
   }
-  document.getElementById('emojiPanel').classList.toggle('show');
+  const panel = document.getElementById('emojiPanel');
+  const willShow = !panel.classList.contains('show');
+  panel.classList.toggle('show');
+  if (willShow) {
+    refreshEmojiPick();
+    if (window.innerWidth <= 700) document.getElementById('msgInput').blur();
+  }
 }
 
 // Custom emoji/kaomoji management
@@ -6800,6 +6849,59 @@ function exportAll() {
   a.download = '梦音传讯_全部数据_' + new Date().toISOString().slice(0,10) + '.json';
   a.click();
   showToast(t('dataExported'));
+}
+
+function copyConvDiag() {
+  var lines = [];
+  lines.push('=== 梦音传讯 会话诊断 ===');
+  lines.push('version=' + (state && state.exportDate ? '' : '') + '角色数=' + (state.characters ? state.characters.length : 0));
+  (state.characters || []).forEach(function(c) {
+    lines.push('角色>' + c.id + '|' + c.name + '|' + c.color);
+  });
+  var cv = state.conversations || {};
+  var keys = Object.keys(cv);
+  lines.push('会话数=' + keys.length);
+  keys.forEach(function(k) {
+    var conv = cv[k];
+    if (!conv) return;
+    var msgs = conv.messages || [];
+    var last = msgs.length ? msgs[msgs.length - 1] : null;
+    var lastStr = last ? (last.text || last.cardText || '').replace(/\s+/g, ' ').slice(0, 22) : '';
+    lines.push('会话>' + conv.id + '|type=' + conv.type + '|charId=' + (conv.charId || '-') + '|name=' + (conv.name || '-') + '|n=' + msgs.length + '|last=' + lastStr);
+  });
+  var text = lines.join('\n');
+  var done = function() { showToast('📋 已复制，请到微信粘贴发我'); };
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function() { showDiagText(text); });
+      return;
+    }
+  } catch (e) {}
+  showDiagText(text);
+}
+function showDiagText(text) {
+  var ov = document.createElement('div');
+  ov.className = 'diagOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;display:flex;align-items:center;justify-content:center';
+  ov.innerHTML = '<div style="background:#fff;border-radius:14px;padding:14px;max-width:94%;width:94%;max-height:82vh;display:flex;flex-direction:column">' +
+    '<div style="font-size:.85em;font-weight:600;margin-bottom:6px">以下是会话诊断，请「复制全部」或长按全选复制，粘贴到微信发我</div>' +
+    '<textarea id="diagBox" style="flex:1;min-height:34vh;height:40vh;font-size:.7em;font-family:monospace;border:1px solid #ddd;border-radius:8px;padding:8px;background:#faf7f4" readonly></textarea>' +
+    '<div style="display:flex;gap:8px;margin-top:8px;justify-content:flex-end">' +
+    '<button class="btn btn-sm" onclick="diagCopyAll()">📋 复制全部</button>' +
+    '<button class="btn btn-sm btn-secondary" onclick="this.closest(\'.diagOverlay\').remove()">✕ 关闭</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  var ta = ov.querySelector('#diagBox');
+  if (ta) ta.value = text;
+}
+function diagCopyAll() {
+  var ta = document.getElementById('diagBox');
+  if (!ta) return;
+  ta.removeAttribute('readonly');
+  ta.focus(); ta.select();
+  try { ta.setSelectionRange(0, ta.value.length); } catch (e) {}
+  try { document.execCommand('copy'); } catch (e) {}
+  showToast('已复制，请到微信粘贴发送');
 }
 
 function importAllFile(e) {
