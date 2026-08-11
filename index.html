@@ -6749,8 +6749,112 @@ function applyConfigData(data) {
   if (data.pokeMessages) { state.pokeMessages = data.pokeMessages; saveData('pokeMessages', state.pokeMessages); }
   if (data.customStatuses) { state.customStatuses = data.customStatuses; saveData('customStatuses', state.customStatuses); }
   if (data.statuses) { state.statuses = data.statuses; saveData('statuses', state.statuses); }
-  _emojiUrlMap = null;
+_emojiUrlMap = null;
 }
+
+function _idKey(o) {
+  if (o && typeof o === 'object' && o.id != null) return 'id:' + o.id;
+  return 's:' + JSON.stringify(o);
+}
+function _numTime(o) {
+  if (!o || typeof o !== 'object') return null;
+  var ks = ['updatedAt', 'editedAt', 'createdAt', 'ts', 'time', 'date', 'timeStamp'];
+  for (var i = 0; i < ks.length; i++) {
+    var v = o[ks[i]];
+    if (typeof v === 'number' && isFinite(v)) return v;
+    if (typeof v === 'string') { var n = Date.parse(v); if (!isNaN(n)) return n; }
+  }
+  return null;
+}
+function _isNewer(a, b) { var ta = _numTime(a), tb = _numTime(b); if (ta == null || tb == null) return false; return ta > tb; }
+function _norm(o) {
+  if (o == null) return '';
+  if (typeof o === 'object') {
+    var keys = Array.isArray(o) ? Object.keys(o) : Object.keys(o).filter(function(k) { return ['id','updatedAt','editedAt','createdAt','ts','timeStamp','lastVisit'].indexOf(k) === -1; });
+    keys = keys.sort();
+    var parts = [];
+    keys.forEach(function(k) { parts.push(typeof o[k] === 'object' ? k + ':' + _norm(o[k]) : k + ':' + JSON.stringify(o[k])); });
+    return '{' + parts.join(',') + '}';
+  }
+  return '' + o;
+}
+function _mergeByKey(local, cloud, keyFn) {
+  if (!Array.isArray(local)) local = [];
+  if (!Array.isArray(cloud)) cloud = [];
+  var out = local.slice();
+  var have = {};
+  out.forEach(function(o) { have[keyFn(o)] = o; });
+  cloud.forEach(function(o) {
+    var k = keyFn(o);
+    if (have[k] === undefined) { out.push(o); have[k] = o; }
+    else if (_isNewer(o, have[k])) { var idx = out.indexOf(have[k]); if (idx >= 0) out[idx] = o; have[k] = o; }
+  });
+  var seen = {}; var res = [];
+  out.forEach(function(o) {
+    var n = 'n:' + _norm(o);
+    if (seen[n] === undefined) { res.push(o); seen[n] = o; }
+    else if (_isNewer(o, seen[n])) { var idx = res.indexOf(seen[n]); if (idx >= 0) res[idx] = o; seen[n] = o; }
+  });
+  return res;
+}
+function _clone(o) { return o == null ? o : JSON.parse(JSON.stringify(o)); }
+function _mergeKeyed(local, cloud) {
+  if (!cloud || typeof cloud !== 'object') return local || {};
+  var out = {};
+  Object.keys(local || {}).forEach(function(k) { out[k] = _clone(local[k]); });
+  Object.keys(cloud).forEach(function(k) {
+    if (!(k in out)) { out[k] = _clone(cloud[k]); return; }
+    var a = out[k], b = cloud[k];
+    if (a && typeof a === 'object' && b && typeof b === 'object') {
+      Object.keys(b).forEach(function(sub) {
+        if (a[sub] === undefined) { a[sub] = _clone(b[sub]); }
+        else if (_isNewer(b[sub], a[sub])) { a[sub] = _clone(b[sub]); }
+      });
+    } else if (_isNewer(b, a)) { out[k] = _clone(b); }
+  });
+  return out;
+}
+function mergeConfigData(cloud) {
+  if (!cloud) return;
+  if (cloud.cards) { state.cards = _mergeByKey(state.cards, cloud.cards, _idKey); saveData('cards', state.cards); }
+  if (cloud.settings) { state.settings = Object.assign({}, state.settings, cloud.settings); saveData('settings', state.settings); }
+  if (cloud.themes) { state.themes = _mergeByKey(state.themes, cloud.themes, _idKey); saveData('themes', state.themes); }
+  if (cloud.customReplies) { state.customReplies = _mergeByKey(state.customReplies, cloud.customReplies, _idKey); saveData('customReplies', state.customReplies); }
+  if (cloud.music) { state.music = _mergeByKey(state.music, cloud.music, _idKey); saveData('music', state.music); }
+  if (cloud.anniversaries) { state.anniversaries = _mergeByKey(state.anniversaries, cloud.anniversaries, _idKey); saveData('anniversaries', state.anniversaries); }
+  if (cloud.calendar) { state.calendar = _mergeKeyed(state.calendar, cloud.calendar); saveData('calendar', state.calendar); }
+  if (cloud.tarotRecords) { state.tarotRecords = _mergeByKey(state.tarotRecords, cloud.tarotRecords, _idKey); saveData('tarotRecords', state.tarotRecords); }
+  if (cloud.letters) { state.letters = _mergeByKey(state.letters, cloud.letters, _idKey); saveData('letters', state.letters); }
+  if (cloud.characters) { state.characters = _mergeByKey(state.characters, cloud.characters, _idKey); saveData('characters', state.characters); }
+  if (cloud.nextCharId || cloud.nextGroupId) {
+    if (cloud.nextCharId && (state.nextCharId || 0) < cloud.nextCharId) { state.nextCharId = cloud.nextCharId; saveData('nextCharId', state.nextCharId); }
+    if (cloud.nextGroupId && (state.nextGroupId || 0) < cloud.nextGroupId) { state.nextGroupId = cloud.nextGroupId; saveData('nextGroupId', state.nextGroupId); }
+  }
+  if (cloud.userEmojis) { state.userEmojis = _mergeByKey(state.userEmojis, cloud.userEmojis, _idKey); saveData('userEmojis', state.userEmojis); }
+  if (cloud.userKaomojis) { state.userKaomojis = _mergeByKey(state.userKaomojis, cloud.userKaomojis, _idKey); saveData('userKaomojis', state.userKaomojis); }
+  if (cloud.userEmojiImages && cloud.userEmojiImages.length) {
+    state.userEmojiImages = _mergeByKey(state.userEmojiImages, cloud.userEmojiImages, function(o) { return o && o.url ? 'u:' + o.url : _idKey(o); });
+    persistEmoji();
+  }
+  if (cloud.cardGroups) { state.cardGroups = _mergeByKey(state.cardGroups, cloud.cardGroups, _idKey); saveData('cardGroups', state.cardGroups); }
+  if (cloud.pokeMessages) {
+    var pm = state.pokeMessages || { me: [], other: [] };
+    ['me', 'other'].forEach(function(w) { pm[w] = _mergeByKey(pm[w], (cloud.pokeMessages[w] || []), _idKey); });
+    state.pokeMessages = pm;
+    saveData('pokeMessages', state.pokeMessages);
+  }
+  if (cloud.customStatuses) { state.customStatuses = _mergeByKey(state.customStatuses, cloud.customStatuses, _idKey); saveData('customStatuses', state.customStatuses); }
+}
+function _cloudRepush(c) {
+  if (!c) return Promise.resolve();
+  var payload = collectConfigData(false);
+  return fetch(c.url + '/rest/v1/syncdata?on_conflict=owner', {
+    method: 'POST',
+    headers: { 'apikey': c.key, 'Authorization': 'Bearer ' + c.key, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
+    body: JSON.stringify({ owner: c.owner, payload: payload, updated_at: new Date().toISOString() })
+  }).then(function(r) { if (!r.ok) throw new Error('' + r.status); }).catch(function() {});
+}
+
 function refreshCloudViews() {
   // Defer heavy re-renders so taps/toast aren't swallowed while storage settles
   setTimeout(function() {
@@ -6820,9 +6924,10 @@ function cloudPullNow() {
     if (!rows || rows.length === 0) throw new Error('云端没有该同步密码的数据；请先在另一台设备点「上传到云」');
     var data = rows[0].payload || {};
     if (document.getElementById('cloudLastTime')) document.getElementById('cloudLastTime').textContent = '☁️ 云端数据更新于 ' + fmtTime(rows[0].updated_at);
-    applyConfigData(data);
+    mergeConfigData(data);
     refreshCloudViews();
-    showToast('📥 已从云端拉取（聊天记录未动）');
+    showToast('📥 已从云端合并拉取（只增不删，聊天未动）');
+    _cloudRepush(c);
   }).catch(function(e) {
     showToast('❌ 拉取失败：' + e.message);
   }).then(function() { if (btn) btn.disabled = false; });
