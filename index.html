@@ -920,7 +920,7 @@ button,input,select,textarea,.tab,.tool-strip,.tool-strip button,.header .action
         <label style="color:var(--primary)">🌐 免费云同步（手机 ⇄ 电脑 一键互同步字卡/表情）</label>
         <div style="font-size:.72em;color:var(--text2);margin:4px 0 8px">
           免账号注册 <b>supabase.com</b>；把项目地址、anon 密钥、自定义“同步密码”填进下面三项（三台设备填一样的密码），
-          <b>任一台点「☁️ 上传」→ 另一台点「📥 拉取」</b>即互相同步。聊天记录不会被上传，手机零负担。
+          <b>任一台设备点一次「🔄 双向同步」即自动智能合并，另一台打开页面也会自动同步</b>。聊天记录不会被上传，手机零负担。
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">
           <input type="text" id="syncSupabaseUrl" placeholder="项目地址（形如 https://xxxx.supabase.co）"
@@ -931,10 +931,11 @@ button,input,select,textarea,.tab,.tool-strip,.tool-strip button,.header .action
             oninput="state.settings.syncOwner=this.value.trim();saveData('settings',state.settings);">
         </div>
         <div class="btn-row" style="margin-bottom:4px">
-          <button class="btn btn-sm" id="cloudPushBtn" onclick="cloudPushNow()">☁️ 上传到云</button>
-          <button class="btn btn-sm btn-secondary" id="cloudPullBtn" onclick="cloudPullNow()">📥 从云拉取</button>
+          <button class="btn btn-sm" id="cloudPushBtn" onclick="cloudSyncNow()">🔄 双向同步</button>
+          <button class="btn btn-sm btn-secondary" id="cloudPullBtn" onclick="cloudSyncNow()">📥 合并拉取</button>
           <button class="btn btn-sm btn-secondary" onclick="copySyncSql()">📋 复制建表SQL</button>
         </div>
+        <div id="cloudStatus" style="font-size:.7em;color:var(--text2);min-height:1em"></div>
         <div id="cloudLastTime" style="font-size:.7em;color:var(--text2)"></div>
       </div>
 
@@ -6895,43 +6896,77 @@ function beginCloudSync() {
     if (confirm('尚未配置云同步。要现在打开设置页填写吗？（免费注册 supabase.com 后填 3 项）')) openSettings();
   }
 }
-function cloudPushNow() {
-  var c = getSyncCreds(true);
-  if (!c) return;
-  var payload = collectConfigData(false); // 不含聊天记录
-  var btn = document.getElementById('cloudPushBtn'); if (btn) btn.disabled = true;
-  fetch(c.url + '/rest/v1/syncdata?on_conflict=owner', {
-    method: 'POST',
-    headers: { 'apikey': c.key, 'Authorization': 'Bearer ' + c.key, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
-    body: JSON.stringify({ owner: c.owner, payload: payload, updated_at: new Date().toISOString() })
-  }).then(function(r) {
-    if (!r.ok) throw new Error('云端返回 ' + r.status + ' ' + r.statusText);
-    showToast('☁️ 已上传到云端（仅字卡/表情/设置，不含聊天）');
-  }).catch(function(e) {
-    showToast('❌ 上传失败：' + e.message + '。需先复制SQL到Supabase建表');
-  }).then(function() { if (btn) btn.disabled = false; });
+var _cloudBusy = false;
+var _lastAutoSync = 0;
+function _setCloudBusy(busy) {
+  var b1 = document.getElementById('cloudPushBtn');
+  var b2 = document.getElementById('cloudPullBtn');
+  [b1, b2].forEach(function(b) { if (b) { b.disabled = busy; b.textContent = busy ? '⏳ 同步中…' : (b.id === 'cloudPushBtn' ? '🔄 双向同步' : '📥 合并拉取'); } });
 }
-function cloudPullNow() {
+function _setCloudStatus(txt) {
+  var el = document.getElementById('cloudStatus');
+  if (el) el.textContent = txt;
+}
+function _syncItemCount() {
+  var s = state || {};
+  return ((s.cards ? s.cards.length : 0) + (s.characters ? s.characters.length : 0) + (s.letters ? s.letters.length : 0));
+}
+function _fetchTimeout(url, opts, ms) {
+  return new Promise(function(resolve, reject) {
+    var t = setTimeout(function() { reject(new Error('超时（' + (ms / 1000) + 's），网络较慢请重试')); }, ms);
+    fetch(url, opts).then(function(r) { clearTimeout(t); resolve(r); }, function(e) { clearTimeout(t); reject(e); });
+  });
+}
+function cloudSyncNow(silent) {
   var c = getSyncCreds(true);
   if (!c) return;
-  var btn = document.getElementById('cloudPullBtn'); if (btn) btn.disabled = true;
-  fetch(c.url + '/rest/v1/syncdata?owner=eq.' + encodeURIComponent(c.owner) + '&select=*&limit=1', {
+  if (_cloudBusy) { if (!silent) _setCloudStatus('⏳ 检测到正在同步，请稍候…'); return; }
+  _cloudBusy = true;
+  _lastAutoSync = Date.now();
+  if (!silent) { _setCloudBusy(true); _setCloudStatus('⏳ 正在双向同步，请稍候…'); }
+  var t0 = Date.now();
+  _fetchTimeout(c.url + '/rest/v1/syncdata?owner=eq.' + encodeURIComponent(c.owner) + '&select=payload&limit=1', {
     headers: { 'apikey': c.key, 'Authorization': 'Bearer ' + c.key }
-  }).then(function(r) {
+  }, 30000).then(function(r) {
     if (!r.ok) throw new Error('云端返回 ' + r.status + ' ' + r.statusText);
     return r.json();
   }).then(function(rows) {
-    if (!rows || rows.length === 0) throw new Error('云端没有该同步密码的数据；请先在另一台设备点「上传到云」');
-    var data = rows[0].payload || {};
-    if (document.getElementById('cloudLastTime')) document.getElementById('cloudLastTime').textContent = '☁️ 云端数据更新于 ' + fmtTime(rows[0].updated_at);
-    mergeConfigData(data);
+    var had = 0, before = _syncItemCount();
+    if (rows && rows.length) { had = 1; mergeConfigData(rows[0].payload || {}); }
+    var added = Math.max(0, _syncItemCount() - before);
+    var payload = collectConfigData(false);
+    return _fetchTimeout(c.url + '/rest/v1/syncdata?on_conflict=owner', {
+      method: 'POST',
+      headers: { 'apikey': c.key, 'Authorization': 'Bearer ' + c.key, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
+      body: JSON.stringify({ owner: c.owner, payload: payload, updated_at: new Date().toISOString() })
+    }, 30000).then(function(r) { if (!r.ok) throw new Error('云端返回 ' + r.status + ' ' + r.statusText); return { had: had, added: added }; });
+  }).then(function(res) {
     refreshCloudViews();
-    showToast('📥 已从云端合并拉取（只增不删，聊天未动）');
-    _cloudRepush(c);
+    var secs = ((Date.now() - t0) / 1000).toFixed(1);
+    var msg = '双向同步完成（' + secs + 's）';
+    if (res.had) msg += (res.added > 0 ? '，新增 ' + res.added + ' 项，已合并' : '，无新增，数据一致');
+    else msg += '，云端尚无该密码数据，已上传本机';
+    _setCloudStatus('✅ ' + msg);
+    if (!silent) showToast('🔄 ' + msg);
   }).catch(function(e) {
-    showToast('❌ 拉取失败：' + e.message);
-  }).then(function() { if (btn) btn.disabled = false; });
+    var msg = e && e.message ? e.message : '未知错误';
+    _setCloudStatus('❌ 同步失败：' + msg);
+    if (!silent) showToast('❌ 同步失败：' + msg);
+  }).then(function() {
+    _setCloudBusy(false);
+    _cloudBusy = false;
+  });
 }
+function autoSyncCheck() {
+  if (!state || !state.settings) return;
+  var s = state.settings;
+  if (!(s.syncSupabaseUrl && s.syncKey && s.syncOwner)) return;
+  if (_cloudBusy) return;
+  if (Date.now() - _lastAutoSync < 60000) return;
+  cloudSyncNow(true);
+}
+function cloudPushNow() { cloudSyncNow(); }
+function cloudPullNow() { cloudSyncNow(); }
 function copySyncSql() {
   var done = function() { showToast('📋 SQL 已复制，去 Supabase → SQL Editor 粘贴并运行'); };
   if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -9591,16 +9626,19 @@ window.addEventListener('DOMContentLoaded', () => {
 window.addEventListener('pageshow', function() {
   try { processDreamPending(); } catch(e) {}
   try { generateOfflineMessages(); } catch(e) {}
+  try { autoSyncCheck(); } catch(e) {}
 });
 window.addEventListener('visibilitychange', function() {
   if (!document.hidden) {
     try { processDreamPending(); } catch(e) {}
     try { generateOfflineMessages(); } catch(e) {}
+    try { autoSyncCheck(); } catch(e) {}
   }
 });
 window.addEventListener('focus', function() {
   try { processDreamPending(); } catch(e) {}
   try { generateOfflineMessages(); } catch(e) {}
+  try { autoSyncCheck(); } catch(e) {}
 });
 </script>
 </body>
