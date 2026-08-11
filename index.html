@@ -9590,14 +9590,17 @@ window.addEventListener('DOMContentLoaded', () => {
 // whenever the tab is shown/focused again so offline replies are still delivered.
 window.addEventListener('pageshow', function() {
   try { processDreamPending(); } catch(e) {}
+  try { generateOfflineMessages(); } catch(e) {}
 });
 window.addEventListener('visibilitychange', function() {
   if (!document.hidden) {
     try { processDreamPending(); } catch(e) {}
+    try { generateOfflineMessages(); } catch(e) {}
   }
 });
 window.addEventListener('focus', function() {
   try { processDreamPending(); } catch(e) {}
+  try { generateOfflineMessages(); } catch(e) {}
 });
 </script>
 </body>
