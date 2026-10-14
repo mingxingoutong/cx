@@ -88,8 +88,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);height:100vh
 .chat-header{height:var(--header-h);display:flex;align-items:center;padding:0 16px;background:var(--surface);border-bottom:1px solid rgba(0,0,0,.06);flex-shrink:0}
 .chat-header .chat-header-name{font-weight:600;font-size:.95em}
 .chat-header .chat-header-type{font-size:.7em;color:var(--text2);margin-left:8px;background:rgba(0,0,0,.05);padding:2px 8px;border-radius:8px}
-.chat-area{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px;background-size:cover;background-position:center}
-.chat-area .msg{max-width:78%;padding:12px 16px;border-radius:var(--radius);font-size:.92em;line-height:1.6;animation:msgIn .35s ease-out;position:relative;word-break:break-word}
+.chat-area{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px;background-size:cover;background-position:center;background-repeat:no-repeat}
+.chat-area .msg{max-width:78%;padding:12px 16px;border-radius:var(--radius);font-size:.92em;line-height:1.6;animation:msgIn .35s ease-out;position:relative;word-break:break-word;-webkit-backdrop-filter:blur(var(--bubble-blur,0px));backdrop-filter:blur(var(--bubble-blur,0px))}
 @keyframes msgIn{from{opacity:0;transform:translateY(12px) scale(.97)}}
 .chat-area .msg.me{align-self:flex-end;background:var(--bubble-me);border-bottom-right-radius:4px;font-size:var(--font-size-me, 16px);border-radius:var(--bubble-radius-me, 16px)}
 .chat-area .msg.other{align-self:flex-start;background:var(--bubble-other);border-bottom-left-radius:4px;box-shadow:0 1px 4px rgba(0,0,0,.04);font-size:var(--font-size-other, 16px);border-radius:var(--bubble-radius-other, 16px)}
@@ -616,10 +616,29 @@ button,input,select,textarea,.tab,.tool-strip,.tool-strip button,.header .action
       </div>
       <div style="font-size:.7em;color:var(--text2);margin:4px 0 6px">上面这张是<b>通用背景</b>，所有对话都用它</div>
       <div class="btn-row" style="margin-bottom:6px">
-        <button class="btn btn-sm" onclick="setCharChatBg()">🎁 设为当前梦角专属背景</button>
-        <button class="btn btn-sm btn-secondary" onclick="clearCharChatBg()">↺ 恢复该梦角用通用背景</button>
+        <button class="btn btn-sm" onclick="setCharChatBg()">🎁 设为当前对话专属背景</button>
+        <button class="btn btn-sm btn-secondary" onclick="clearCharChatBg()">↺ 恢复该对话用通用背景</button>
       </div>
-      <div style="font-size:.7em;color:var(--text2);margin:-2px 0 6px">点它之后，只有和这位梦角聊天时才用这张图</div>
+      <div style="font-size:.7em;color:var(--text2);margin:-2px 0 6px">每个梦角、每个群聊都可各设一张，互不影响；不设则用通用</div>
+
+      <label>背景朦胧度 (防影响读字)</label>
+      <div style="display:flex;gap:10px;align-items:center;margin:2px 0 8px">
+        <input type="range" id="bgVeil" min="0" max="80" value="0" oninput="setBgVeil(this.value)" style="flex:1">
+        <span id="bgVeilVal" style="font-size:.8em;min-width:34px">0%</span>
+      </div>
+
+      <label>气泡玻璃感 (聊天更清楚)</label>
+      <div style="display:flex;gap:10px;align-items:center;margin:2px 0">
+        <span style="font-size:.8em;color:var(--text2);min-width:44px">透明度</span>
+        <input type="range" id="bubbleOpacity" min="30" max="100" value="100" oninput="setBubbleOpacity(this.value)" style="flex:1">
+        <span id="bubbleOpacityVal" style="font-size:.8em;min-width:38px">100%</span>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;margin:2px 0 8px">
+        <span style="font-size:.8em;color:var(--text2);min-width:44px">模糊</span>
+        <input type="range" id="bubbleBlur" min="0" max="20" value="0" oninput="setBubbleBlur(this.value)" style="flex:1">
+        <span id="bubbleBlurVal" style="font-size:.8em;min-width:38px">0px</span>
+      </div>
+      <div style="font-size:.7em;color:var(--text2);margin:-4px 0 8px">把气泡透明度调低 + 模糊调高 = 微信/Telegram 那种毛玻璃气泡，花哨背景也不怕看不清字</div>
 
       <label>字体大小 (单独设置)</label>
       <div style="display:flex;gap:12px;margin:4px 0;align-items:center">
@@ -1002,12 +1021,14 @@ button,input,select,textarea,.tab,.tool-strip,.tool-strip button,.header .action
       <div class="input-group">
         <input type="text" id="anniName" placeholder="纪念日名称">
         <input type="date" id="anniDate">
+        <select id="anniChar" style="width:auto" title="归属梦角"></select>
         <select id="anniType" style="width:auto">
           <option value="past">过去→今天</option>
           <option value="future">今天→未来</option>
         </select>
         <button class="btn btn-sm" onclick="addAnniversary()">➕</button>
       </div>
+      <div style="font-size:.7em;color:var(--text2);margin:2px 0 6px">可选归属某位梦角（各梦角独立），或选「通用」</div>
 
       <label id="at7" style="margin-top:12px">抉择助手</label>
       <div class="btn-row">
@@ -1039,7 +1060,17 @@ button,input,select,textarea,.tab,.tool-strip,.tool-strip button,.header .action
         <div class="toggle" id="sheetAiToggle" onclick="toggleSwitch('sheetAi')"></div>
       </div>
       <div style="font-size:.7em;color:var(--text2);margin:-2px 0 6px">梦角答卷时用 AI 思考作答；关掉则用字卡库随机答</div>
-      <div style="font-size:.7em;color:var(--text2);margin:6px 0 6px">两项各约 0.0003 元/次，几乎不花钱</div>
+      <div class="switch-row">
+        <label>💌 梦角主动发问卷</label>
+        <div class="toggle" id="autoSheetToggle" onclick="toggleSwitch('autoSheet')"></div>
+      </div>
+      <div style="font-size:.7em;color:var(--text2);margin:-2px 0 6px">每天最多1次、需聊过几句；40%由 AI 结合人设+近期聊天现编（约0.001元/份）</div>
+      <div class="switch-row">
+        <label>🧠 AI 观察笔记用 key</label>
+        <div class="toggle" id="aiNotesKeyToggle" onclick="toggleSwitch('aiNotesKey')"></div>
+      </div>
+      <div style="font-size:.7em;color:var(--text2);margin:-2px 0 6px">让 AI 结合心理学洞察梦角与你（每周自动1次，约0.002元/次）；关掉则不调用</div>
+      <div style="font-size:.7em;color:var(--text2);margin:6px 0 6px">各项约 0.0003~0.002 元/次，几乎不花钱</div>
 
       <label style="margin-top:12px">📦 梦角小仓库配额</label>
       <div style="display:flex;align-items:center;gap:8px">
@@ -2153,7 +2184,8 @@ let state = {
     letter: false, myName: '我', partnerName: '梦角',
     bgColor: '#f5f0eb', primaryColor: '#c49a8c', bubbleMeColor: '#f0e6e1',
     bubbleOtherColor: '#ffffff', textColor: '#3d2c2e', chatBg: '', charChatBg: {},
-    keySessionOnly: false, keyMaster: true,
+    bgVeil: 0, bubbleOpacity: 100, bubbleBlur: 0,
+    keySessionOnly: false, keyMaster: true, autoSheet: true, aiNotesKey: true,
     fontSizeMe: 16, fontSizeOther: 16, bubbleStyleMe: 'standard', bubbleStyleOther: 'standard',
     soundMe: 'send', soundOther: 'receive',
     voiceEnabled: false, voiceId: '', voicePitch: 1.0, voiceRate: 1.0, voiceSoftness: 0, voiceBrightness: 0, voiceDepth: 0, voiceGender: '', voiceClips: [],
@@ -2640,6 +2672,80 @@ function updateCharPersona(charId, text) {
   saveData('characters', state.characters);
 }
 
+// ====== AI 观察笔记：AI 结合各领域知识，观察梦角与用户，辅助梦角更好地陪伴你 ======
+// 发给 AI 前先打码：手机号/邮箱/身份证/银行卡等敏感信息替换成占位符
+function _maskSensitive(t) {
+  return (t || '')
+    .replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g, '（邮箱）')
+    .replace(/\d{17}[\dXx]/g, '（身份证）')
+    .replace(/\d{15}/g, '（身份证）')
+    .replace(/1[3-9]\d{9}/g, '（手机号）')
+    .replace(/\b\d{16,19}\b/g, '（卡号）');
+}
+function updateAiPersonaNotes(charId, done) {
+  var ch = getCharacter(charId);
+  if (!ch) { if (done) done(false); return; }
+  var key = getDeepSeekKey();
+  if (!key || !keyMasterAllows() || state.settings.aiNotesKey === false) { if (done) done(false); return; }
+  var conv = state.conversations['conv_' + charId];
+  var msgs = (conv && conv.messages) || [];
+  if (msgs.length < 10) { if (done) done(false); return; }
+  var recent = _maskSensitive(msgs.slice(-60).map(function(m) {
+    var who = m.from === 'me' ? '用户' : ch.name;
+    var txt = (m.text || '').replace(/<[^>]+>/g, '').substring(0, 70);
+    return who + '：' + txt;
+  }).join('\n'));
+  // 让 AI 自由调动各领域知识（不限于心理学），产出"性格 + 洞察 + 陪伴建议"
+  var sys = '你是一位真正博学、有洞察力的助手（像一位博闻强识又温柔的朋友），能自由调动任何领域的知识——心理学、社会学、沟通学、文学、历史、影视、常识与幽默感——来帮助理解人与人的关系。' +
+    '读下面这段「用户」与梦角「' + ch.name + '」的聊天，产出一份观察笔记，目标是让梦角更懂用户、更好地陪伴与沟通。' +
+    '判断可参考依恋类型、爱的语言、情绪共情、积极倾听等，但别掉书袋；若聊天涉及其他话题（爱好、工作、困扰、喜欢的作品……），也请调用相应领域知识，给出真正贴切、有用的洞察。' +
+    '用第三人称、要点式中文，总长不超过160字，分三部分：\n' +
+    '① 梦角性格与说话风格：\n' +
+    '② 对用户的观察（情绪状态、在意的事、深层需求/雷区，可结合任何相关知识）：\n' +
+    '③ 陪伴建议（梦角可以怎么回应、聊什么更能拉近距离；要具体、可执行）：\n' +
+    '只输出笔记本身，不要客套话，不要评价用户好坏。';
+  // 过往浓缩笔记作为上下文传入，让 AI 在其基础上沉淀更新（而非每次推倒重来）
+  var prev = ch.aiNotes ? ('这是之前的观察笔记（请在此基础上延续、修正、沉淀，不要简单照抄）：\n' + ch.aiNotes + '\n\n') : '';
+  var userContent = prev + '最新聊天：\n' + recent;
+  fetch('https://api.deepseek.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: [{ role: 'system', content: sys }, { role: 'user', content: userContent }],
+      max_tokens: 300
+    })
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    var note = ((data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '').trim();
+    if (note) {
+      ch.aiNotes = note.slice(0, 600);
+      ch.aiNotesAt = Date.now();
+      ch.aiNotesMsgCount = msgs.length;
+      saveData('characters', state.characters);
+      if (_expandedCharGroup === charId) renderCharManager();
+    }
+    if (done) done(!!note);
+  }).catch(function() { if (done) done(false); });
+}
+// 每周最多自动观察一次（省钱省心）；手动点「🔄 更新」不受此限
+function maybeUpdateAiNotes(charId) {
+  var ch = getCharacter(charId);
+  if (!ch) return;
+  if (state.settings.aiNotesKey === false) return;
+  var conv = state.conversations['conv_' + charId];
+  var n = (conv && conv.messages) ? conv.messages.length : 0;
+  if (n < 15) return;
+  var lastAt = ch.aiNotesAt || 0;
+  var weekMs = 7 * 24 * 3600 * 1000;
+  if (lastAt && (Date.now() - lastAt) < weekMs) return;
+  updateAiPersonaNotes(charId);
+}
+var _aiNotesOpen = {};
+function toggleAiNotesView(charId) {
+  _aiNotesOpen[charId] = !_aiNotesOpen[charId];
+  renderCharManager();
+}
+
 var _expandedCharGroup = null;
 
 function renderCharManager() {
@@ -2673,10 +2779,18 @@ function renderCharManager() {
         }).join('') +
         '<div onclick="clearCharGroups(\'' + c.id + '\')" style="cursor:pointer;padding:4px 8px;border-radius:6px;font-size:.75em;color:#e74c3c;margin-top:2px;transition:background .2s" onmouseover="this.style.background=\'rgba(0,0,0,.04)\'" onmouseout="this.style.background=\'\'">✕ 不使用任何分组字卡</div>' +
         '<div onclick="setAllCharGroups(\'' + c.id + '\')" style="cursor:pointer;padding:4px 8px;border-radius:6px;font-size:.75em;color:var(--primary);transition:background .2s" onmouseover="this.style.background=\'rgba(0,0,0,.04)\'" onmouseout="this.style.background=\'\'">↺ 重置为全部字卡</div>' +
-        '<div style="margin-top:8px"><label style="font-size:.72em;color:var(--text2)">🎭 人设描述（AI 作答/润色参考，仅存本机不入云）</label>' +
-        '<textarea data-persona-char="' + c.id + '" rows="2" placeholder="例如：温柔安静、说话带古风、喜欢天文……" ' +
+        '<div style="margin-top:8px"><label style="font-size:.72em;color:var(--text2)">🎭 人设描述（可选；AI 作答参考，仅存本机不入云）</label>' +
+        '<textarea data-persona-char="' + c.id + '" rows="2" placeholder="留空则用下方 AI 观察笔记……" ' +
           'style="width:100%;margin-top:3px;padding:6px;border:1px dashed #e8ddd5;border-radius:8px;font-size:.78em;background:var(--surface);color:var(--text);resize:vertical;outline:none" ' +
           'oninput="updateCharPersona(\'' + c.id + '\', this.value)">' + escapeHtml(c.persona || '') + '</textarea></div>' +
+        // AI 观察笔记：只读展示 + 手动刷新
+        '<div style="margin-top:6px;border-top:1px dashed #f0e8e2;padding-top:6px">' +
+          '<div style="display:flex;align-items:center;gap:6px">' +
+            '<div onclick="toggleAiNotesView(\'' + c.id + '\')" style="flex:1;cursor:pointer;font-size:.74em;color:var(--primary);padding:3px 0">👁 ' + (_aiNotesOpen[c.id] ? '收起' : '查看') + ' AI 观察到的 TA' + (c.aiNotes ? '' : '（暂无）') + '</div>' +
+            '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();updateAiPersonaNotes(\'' + c.id + '\',function(ok){showToast(ok?\'🔄 已更新观察笔记\':\'需要 key 且聊天≥10句\')})" style="padding:2px 8px;font-size:.68em" title="让 AI 重新观察总结">🔄 更新</button>' +
+          '</div>' +
+          (_aiNotesOpen[c.id] ? '<div style="font-size:.74em;color:var(--text2);background:rgba(196,154,140,.08);border-radius:8px;padding:7px 9px;margin-top:4px;line-height:1.5;white-space:pre-wrap">' + (c.aiNotes ? escapeHtml(c.aiNotes) : '还没观察过。点右上「🔄 更新」让 AI 看聊天总结（需已填 key）。') + (c.aiNotesAt ? '<div style="font-size:.9em;opacity:.7;margin-top:3px">更新于 ' + new Date(c.aiNotesAt).toLocaleString() + '</div>' : '') + '</div>' : '') +
+        '</div>' +
       '</div>';
     }
     return '<div style="border-bottom:1px solid #f0e8e2">' +
@@ -3298,6 +3412,8 @@ function addMessage(from, text, isCard, cardText, convId, quiz, quoteTo) {
     if (from === 'me' || _newMsgCount === 0) scrollToBottom();
   }
   renderConvList();
+  // 每聊够一定数量，让 AI 重新观察这位梦角的性格（作答参考）
+  if (from !== 'me' && conv.type === 'single' && conv.charId) { try { maybeUpdateAiNotes(conv.charId); } catch (e) {} }
   if (from === 'me') {
     // Vibrate on send if setting enabled
     if (navigator.vibrate && state.settings.notifyVibrate !== false) {
@@ -3901,6 +4017,7 @@ function simulateCharMood(charId, convId) {
   if (state.anniversaries && state.anniversaries.length) {
     var isAnniv = state.anniversaries.some(function(a) {
       if (!a || !a.date) return false;
+      if (a.charId && a.charId !== charId) return false; // 只算「通用」或属于该梦角的
       var parts = a.date.split('-');
       if (parts.length < 3) return false;
       var aMd = parseInt(parts[1], 10) + '-' + parseInt(parts[2], 10);
@@ -3935,6 +4052,7 @@ function simulateCharMood(charId, convId) {
       for (var k = 0; k < state.anniversaries.length; k++) {
         var a2 = state.anniversaries[k];
         if (!a2 || !a2.date) continue;
+        if (a2.charId && a2.charId !== charId) continue; // 只算「通用」或属于该梦角的
         var p2 = a2.date.split('-');
         if (p2.length < 3) continue;
         var a2Md = parseInt(p2[1], 10) + '-' + parseInt(p2[2], 10);
@@ -5585,47 +5703,102 @@ function loadBgFile(e) {
   reader.readAsDataURL(file);
 }
 
-// ---- 聊天背景：优先用「当前梦角专属背景」，没有则用通用背景 ----
-function _currentCharIdForBg() {
+// ---- 聊天背景：按「会话」独立（单人梦角 / 群聊都可单独设置），没有则用通用背景 ----
+function _currentConvIdForBg() {
   var convId = state.currentConvId || '';
-  if (convId.indexOf('conv_') !== 0) return null;
-  var charId = convId.substring(5);
-  return getCharacter(charId) ? charId : null;
+  if (!convId || !state.conversations[convId]) return null;
+  return convId;
+}
+// 兼容旧数据：以前的 charChatBg 用 charId 作 key，迁移成 conv_<charId>
+function _migrateCharChatBg() {
+  var map = state.settings.charChatBg;
+  if (!map || typeof map !== 'object') return;
+  var changed = false, next = {};
+  Object.keys(map).forEach(function(k) {
+    var nk = (k.indexOf('conv_') === 0) ? k : ('conv_' + k);
+    if (nk !== k) changed = true;
+    next[nk] = map[k];
+  });
+  if (changed) { state.settings.charChatBg = next; saveData('settings', state.settings); }
 }
 function applyChatBackground() {
   var ca = document.getElementById('chatArea');
   if (!ca) return;
   var url = state.settings.chatBg || '';
-  var charId = _currentCharIdForBg();
+  var convId = _currentConvIdForBg();
   var map = state.settings.charChatBg || {};
-  if (charId && Object.prototype.hasOwnProperty.call(map, charId)) url = map[charId] || '';
-  ca.style.backgroundImage = url ? 'url(' + url + ')' : '';
+  if (convId && Object.prototype.hasOwnProperty.call(map, convId)) url = map[convId] || '';
+  // 朦胧度：用一层半透明的 App 底色「盖」在图片上（veil），气泡不受影响、文字更好读
+  var veil = Math.max(0, Math.min(80, Number(state.settings.bgVeil) || 0)) / 100;
+  if (url) {
+    var veilColor = '245,240,235'; // --bg #f5f0eb
+    ca.style.backgroundImage = 'linear-gradient(rgba(' + veilColor + ',' + veil + '),rgba(' + veilColor + ',' + veil + ')),url(' + url + ')';
+  } else {
+    ca.style.backgroundImage = '';
+  }
 }
 function setCharChatBg() {
-  var charId = _currentCharIdForBg();
-  if (!charId) { showToast('请先打开一个和梦角的单人对话'); return; }
+  var convId = _currentConvIdForBg();
+  if (!convId) { showToast('请先打开一个对话'); return; }
   if (!state.settings.chatBg) { showToast('请先在上面设置一张背景图'); return; }
   if (!state.settings.charChatBg) state.settings.charChatBg = {};
-  state.settings.charChatBg[charId] = state.settings.chatBg;
+  state.settings.charChatBg[convId] = state.settings.chatBg;
   saveData('settings', state.settings);
   applyChatBackground();
-  showToast('🎁 已设为「' + getCharacter(charId).name + '」的专属背景');
+  var nm = (state.conversations[convId] && state.conversations[convId].name) || '该对话';
+  showToast('🎁 已设为「' + nm + '」的专属背景');
 }
 function clearCharChatBg() {
-  var charId = _currentCharIdForBg();
-  if (!charId) { showToast('请先打开一个和梦角的单人对话'); return; }
-  if (state.settings.charChatBg && state.settings.charChatBg[charId] !== undefined) {
-    delete state.settings.charChatBg[charId];
+  var convId = _currentConvIdForBg();
+  if (!convId) { showToast('请先打开一个对话'); return; }
+  if (state.settings.charChatBg && state.settings.charChatBg[convId] !== undefined) {
+    delete state.settings.charChatBg[convId];
     saveData('settings', state.settings);
   }
   applyChatBackground();
   showToast('↺ 已恢复使用通用背景');
 }
+function setBgVeil(val) {
+  state.settings.bgVeil = Number(val) || 0;
+  var lab = document.getElementById('bgVeilVal');
+  if (lab) lab.textContent = state.settings.bgVeil + '%';
+  saveData('settings', state.settings);
+  applyChatBackground();
+}
+// ---- 气泡玻璃感：透明度 + 模糊（参考微信/Telegram 的毛玻璃气泡）----
+function applyBubbleGlass() {
+  var op = Math.max(30, Math.min(100, Number(state.settings.bubbleOpacity) || 100)) / 100;
+  var blur = Math.max(0, Math.min(20, Number(state.settings.bubbleBlur) || 0));
+  function rgba(hex) {
+    var h = (hex || '#ffffff').replace('#', '');
+    if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+    var r = parseInt(h.substring(0,2),16)||0, g = parseInt(h.substring(2,4),16)||0, b = parseInt(h.substring(4,6),16)||0;
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + op + ')';
+  }
+  document.documentElement.style.setProperty('--bubble-me', rgba(state.settings.bubbleMeColor));
+  document.documentElement.style.setProperty('--bubble-other', rgba(state.settings.bubbleOtherColor));
+  document.documentElement.style.setProperty('--bubble-blur', blur + 'px');
+}
+function setBubbleOpacity(val) {
+  state.settings.bubbleOpacity = Number(val) || 100;
+  var lab = document.getElementById('bubbleOpacityVal');
+  if (lab) lab.textContent = state.settings.bubbleOpacity + '%';
+  saveData('settings', state.settings);
+  applyBubbleGlass();
+}
+function setBubbleBlur(val) {
+  state.settings.bubbleBlur = Number(val) || 0;
+  var lab = document.getElementById('bubbleBlurVal');
+  if (lab) lab.textContent = state.settings.bubbleBlur + 'px';
+  saveData('settings', state.settings);
+  applyBubbleGlass();
+}
 // 头像随时改：点聊天顶部头像即可换图
 function openAvatarFromHeader() {
-  var charId = _currentCharIdForBg();
-  if (!charId) { showToast('群聊/无对话时请到「新角色」里更换头像'); return; }
-  openAvatarPicker(charId);
+  var convId = _currentConvIdForBg();
+  var conv = convId ? state.conversations[convId] : null;
+  if (!conv || conv.type !== 'single') { showToast('群聊/无对话时请到「新角色」里更换头像'); return; }
+  openAvatarPicker(conv.charId);
 }
 
 function setFontSize(val) {
@@ -6799,6 +6972,8 @@ function applySettings() {
     safeToggle('aiPolishToggle', s.aiPolish);
     safeToggle('callAiPolishToggle', s.callAiPolish);
     safeToggle('sheetAiToggle', s.sheetAi !== false);
+    safeToggle('autoSheetToggle', s.autoSheet !== false);
+    safeToggle('aiNotesKeyToggle', s.aiNotesKey !== false);
     safeToggle('keyMasterToggle', s.keyMaster !== false);
     safeToggle('charPokeToggle', s.charPoke !== false);
     safeToggle('keySessionOnlyToggle', !!s.keySessionOnly);
@@ -6827,6 +7002,10 @@ function applySettings() {
     if (s.fontSizeMe) { safeVal('fontSizeMe', s.fontSizeMe); document.getElementById('fontSizeMeVal').textContent = s.fontSizeMe; }
     if (s.fontSizeOther) { safeVal('fontSizeOther', s.fontSizeOther); document.getElementById('fontSizeOtherVal').textContent = s.fontSizeOther; }
     if (s.fontFamily) { safeVal('fontFamily', s.fontFamily); }
+    // 背景朦胧 + 气泡玻璃感 还原
+    if (s.bgVeil != null) { safeVal('bgVeil', s.bgVeil); safeText('bgVeilVal', (s.bgVeil||0) + '%'); }
+    if (s.bubbleOpacity != null) { safeVal('bubbleOpacity', s.bubbleOpacity); safeText('bubbleOpacityVal', (s.bubbleOpacity||100) + '%'); }
+    if (s.bubbleBlur != null) { safeVal('bubbleBlur', s.bubbleBlur); safeText('bubbleBlurVal', (s.bubbleBlur||0) + 'px'); }
     toggleFloatPlayer();
     if (currentLang !== s.lang) {
       currentLang = s.lang;
@@ -6842,6 +7021,7 @@ function applySettings() {
     if (s.headerBgColor) document.documentElement.style.setProperty('--header-bg', s.headerBgColor);
     if (s.inputBgColor) document.documentElement.style.setProperty('--input-bg', s.inputBgColor);
     if (s.sidebarBgColor) document.documentElement.style.setProperty('--sidebar-bg', s.sidebarBgColor);
+    try { _migrateCharChatBg(); applyBubbleGlass(); applyChatBackground(); } catch(e) {}
     // Initialize voice settings UI
     setTimeout(initVoiceUI, 300);
   } catch(e) { console.error('applySettings error:', e); }
@@ -7472,10 +7652,13 @@ function collectConfigData(includeChat) {
   // 敏感字段（DeepSeek Key）不进云不导出，只留本机 localStorage
   var safeSettings = Object.assign({}, state.settings);
   delete safeSettings.deepseekKey;
-  // 人设描述为隐私字段，不进云（characters 克隆时剔除 persona）
+  // 人设描述 + AI 观察笔记为隐私字段，不进云不导出（characters 克隆时剔除）
   var safeChars = state.characters.map(function(c) {
     var cl = Object.assign({}, c);
     delete cl.persona;
+    delete cl.aiNotes;
+    delete cl.aiNotesAt;
+    delete cl.aiNotesMsgCount;
     return cl;
   });
   const data = {
@@ -7895,7 +8078,9 @@ function importAllFile(e) {
       renderCardGroupList();
       renderCustomReplies();
       renderMusicLists();
-      renderAnniversaries();
+    renderAnniversaries();
+    populateAnniCharSelect();
+    renderAnniversaries();
       updateStats();
       updateCardCount();
       renderConvList();
@@ -8057,16 +8242,26 @@ function deleteCustomReply(idx) {
 }
 
 // ========== ANNIVERSARIES ==========
+function populateAnniCharSelect() {
+  var sel = document.getElementById('anniChar');
+  if (!sel) return;
+  var cur = sel.value;
+  sel.innerHTML = '<option value="">通用</option>' +
+    (state.characters || []).map(function(c) { return '<option value="' + c.id + '">' + escapeHtml(c.name) + '</option>'; }).join('');
+  if (cur) sel.value = cur;
+}
 function addAnniversary() {
   const name = document.getElementById('anniName').value.trim();
   const date = document.getElementById('anniDate').value;
   const type = document.getElementById('anniType').value;
+  const charId = document.getElementById('anniChar').value || null; // null = 通用
   if (!name || !date) return showToast('请输入名称和日期');
-  state.anniversaries.push({ name, date, type });
+  state.anniversaries.push({ name, date, type, charId });
   saveData('anniversaries', state.anniversaries);
   document.getElementById('anniName').value = '';
   renderAnniversaries();
-  showToast(`已添加纪念日: ${name}`);
+  var who = charId ? charNameOf(charId) : '通用';
+  showToast(`已添加纪念日: ${name}（${who}）`);
 }
 
 function renderAnniversaries() {
@@ -8076,12 +8271,27 @@ function renderAnniversaries() {
     el.innerHTML = '<div style="font-size:.85em;color:var(--text2);padding:8px 0">暂无纪念日</div>';
     return;
   }
-  el.innerHTML = state.anniversaries.map((a, i) => {
-    const diff = calcDays(a.date, a.type);
-    return `<div class="card-item">
-      <div class="text"><strong>${escapeHtml(a.name)}</strong><br><span style="font-size:.8em;color:var(--text2)">${a.date} · ${diff} 天</span></div>
-      <button class="del-btn" onclick="deleteAnniversary(${i})">✕</button>
-    </div>`;
+  // 按归属梦角分组（通用在最前）
+  var groups = {};
+  state.anniversaries.forEach(function(a, i) {
+    var key = a.charId || '';
+    (groups[key] = groups[key] || []).push({ a: a, i: i });
+  });
+  var keys = Object.keys(groups).sort();
+  el.innerHTML = keys.map(function(key) {
+    var label = key ? ('🎭 ' + charNameOf(key)) : '🌐 通用';
+    var color = key ? (getCharacter(key) ? getCharacter(key).color : 'var(--primary)') : '#8a9a7b';
+    var rows = groups[key].map(function(o) {
+      var a = o.a, i = o.i;
+      const diff = calcDays(a.date, a.type);
+      return `<div class="card-item">
+        <div class="text"><strong>${escapeHtml(a.name)}</strong><br><span style="font-size:.8em;color:var(--text2)">${a.date} · ${diff} 天</span></div>
+        <button class="del-btn" onclick="deleteAnniversary(${i})">✕</button>
+      </div>`;
+    }).join('');
+    return '<div style="margin-bottom:8px">' +
+      '<div style="font-size:.78em;font-weight:700;color:' + color + ';border-bottom:1px dashed #e0d0c4;padding-bottom:2px;margin-bottom:3px">' + label + '（' + groups[key].length + '）</div>' +
+      rows + '</div>';
   }).join('');
 }
 
@@ -9174,7 +9384,7 @@ function openSettings() {
   if (o) o.value = state.settings.syncOwner || '';
   // Defer heavy list renders and stagger them so the modal appears instantly and the first tap is never swallowed
   setTimeout(function() { updateStats(); populateCardGroupSelect(); }, 20);
-  setTimeout(function() { renderCustomReplies(); renderAnniversaries(); }, 140);
+  setTimeout(function() { renderCustomReplies(); populateAnniCharSelect(); renderAnniversaries(); }, 140);
 }
 
 function closeModal(id) {
@@ -10013,15 +10223,15 @@ function renderPaperOverview() {
     html += '<div style="margin-bottom:8px">';
     html += '<div style="font-size:.82em;font-weight:700;color:var(--primary);border-bottom:1px dashed #e0d0c4;padding-bottom:3px;margin-bottom:4px">' + cn[gi++] + '、' + g[1] + '（' + idxs.length + '题）</div>';
     idxs.forEach(function(i) {
-      qGlobal++;
       var q = s.questions[i];
       var state = '', color = '';
       if (mode === 'design') { state = (q.text && q.text.trim()) ? '✎ 已填写' : '待填写'; }
       else if (mode === 'answer') { state = qAnswered('answer', s, q) ? '✅ 已答' : '未答'; }
       color = (state === '待填写' || state === '未答') ? '#e57373' : '#4caf50';
-      html += '<div onclick="paperGoDetail(' + i + ')" style="display:flex;gap:6px;align-items:flex-start;padding:5px 4px;border-bottom:1px dotted #eee;cursor:pointer;font-size:.82em" onmouseover="this.style.background=\'rgba(196,154,140,.08)\'" onmouseout="this.style.background=\'\'">' +
-        '<span style="color:var(--text2);flex-shrink:0">' + qGlobal + '.</span>' +
-        '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:' + ((q.text && q.text.trim()) ? 'var(--text)' : '#bbb') + '">' + escapeHtml((q.text && q.text.trim()) ? q.text : '（点击填写题干）') + '</span>' +
+      // 编号用题目在数组里的真实序号，保证与细节卷「第X题」一致
+      html += '<div onclick="paperGoDetail(' + i + ')" style="display:flex;gap:6px;align-items:flex-start;padding:6px 4px;border-bottom:1px dotted #eee;cursor:pointer;font-size:.82em" onmouseover="this.style.background=\'rgba(196,154,140,.08)\'" onmouseout="this.style.background=\'\'">' +
+        '<span style="color:var(--text2);flex-shrink:0">' + (i + 1) + '.</span>' +
+        '<span style="flex:1;min-width:0;white-space:pre-wrap;word-break:break-word;line-height:1.5;color:' + ((q.text && q.text.trim()) ? 'var(--text)' : '#bbb') + '">' + escapeHtml((q.text && q.text.trim()) ? q.text : '（点击填写题干）') + '</span>' +
         (state ? '<span style="font-size:.85em;color:' + color + ';flex-shrink:0">' + state + '</span>' : '') +
       '</div>';
     });
@@ -10049,6 +10259,10 @@ function renderPaperDetail() {
   html += nav;
   html += '<div style="background:#fffdf9;border:1px solid #e8ddd5;border-radius:12px;padding:12px">';
   html += '<div style="font-size:.8em;margin-bottom:6px"><span style="font-size:.7em;background:var(--primary);color:#fff;padding:1px 6px;border-radius:6px;margin-right:6px">' + typeLabelOf(q.type) + '</span>第' + (qi + 1) + '题</div>';
+  // 作答/查看模式下也完整显示题干（长题干自动换行），不用回阅览卷找题目
+  if (mode !== 'design') {
+    html += '<div style="font-size:.92em;line-height:1.65;margin:4px 0 10px;font-weight:600;white-space:pre-wrap;word-break:break-word">' + escapeHtml(q.text || '（无题干）') + '</div>';
+  }
   if (mode === 'design') {
     html += '<textarea rows="2" placeholder="输入题干内容" style="width:100%;font-size:.85em;padding:6px 8px;border:1px solid #e8ddd5;border-radius:8px" oninput="paperSetQText(this.value)">' + escapeHtml(q.text || '') + '</textarea>';
     if (q.options) {
@@ -10069,8 +10283,15 @@ function renderPaperDetail() {
           '<input type="' + (q.type === 'single' ? 'radio' : 'checkbox') + '" name="ans_' + q.id + '" value="' + attrEsc(o) + '" ' + (checked ? 'checked' : '') + ' onchange="paperPick(\'' + q.id + '\',\'' + q.type + '\',this)">' +
           '<span>' + escapeHtml(o) + '</span></label>';
       }).join('');
+    } else if (q.type === 'fill') {
+      // 填空题：像真实填空一样，给一条横线 + 单行输入框
+      html += '<div style="font-size:.82em;color:var(--text2);margin:8px 0 2px">在横线上填写你的答案：</div>';
+      html += '<div style="display:flex;align-items:center;gap:6px">' +
+        '<input type="text" value="' + attrEsc(typeof myA === 'string' ? myA : '') + '" placeholder="＿＿＿＿＿＿＿＿" ' +
+        'style="flex:1;font-size:.9em;padding:6px 2px;border:none;border-bottom:1.5px solid var(--primary);background:transparent;outline:none" ' +
+        'oninput="paperSetFill(\'' + q.id + '\',this.value)"></div>';
     } else {
-      html += '<textarea rows="3" placeholder="写下你的回答..." style="width:100%;font-size:.85em;padding:6px 8px;border:1px solid #e8ddd5;border-radius:8px" oninput="paperSetFill(\'' + q.id + '\',this.value)">' + escapeHtml(typeof myA === 'string' ? myA : '') + '</textarea>';
+      html += '<textarea rows="4" placeholder="写下你的回答..." style="width:100%;font-size:.85em;padding:6px 8px;border:1px solid #e8ddd5;border-radius:8px" oninput="paperSetFill(\'' + q.id + '\',this.value)">' + escapeHtml(typeof myA === 'string' ? myA : '') + '</textarea>';
     }
   } else {
     var side = _paperSide;
@@ -10089,9 +10310,15 @@ function renderPaperDetail() {
     }
   }
   html += '</div>';
-  html += '<div style="display:flex;justify-content:space-between;margin-top:8px">' +
-    '<button class="btn btn-sm btn-secondary" onclick="paperPrevQ()" ' + (qi === 0 ? 'disabled' : '') + '>‹ 上一题</button>' +
-    '<button class="btn btn-sm btn-secondary" onclick="paperNextQ()" ' + (qi >= total - 1 ? 'disabled' : '') + '>下一题 ›</button></div>';
+  var isLast = qi >= total - 1;
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;min-height:32px">' +
+    (qi === 0
+      ? '<span style="font-size:.78em;color:var(--text2)">‹ 已是第一题</span>'
+      : '<button class="btn btn-sm btn-secondary" onclick="paperPrevQ()">‹ 上一题</button>') +
+    (isLast
+      ? '<span style="font-size:.8em;color:var(--primary);font-weight:600">🏁 这是最后一题啦</span>'
+      : '<button class="btn btn-sm btn-secondary" onclick="paperNextQ()">下一题 ›</button>') +
+  '</div>';
   document.getElementById('sheetPaperBody').innerHTML = html;
   renderPaperFooter();
 }
@@ -10108,7 +10335,8 @@ function renderPaperFooter() {
         '<button class="btn" style="width:100%" onclick="finishPaperDesign()">✅ 创建并开始</button>';
     }
   } else if (mode === 'answer') {
-    f.innerHTML = '<button class="btn" style="width:100%" onclick="submitMyAnswers()">✅ 提交我的答卷</button>';
+    f.innerHTML = '<div style="font-size:.7em;color:var(--text2);margin-bottom:5px;text-align:center">🤝 梦角正和你同时独立作答，看不到你的答案，答完再一起对</div>' +
+      '<button class="btn" style="width:100%" onclick="submitMyAnswers()">✅ 提交我的答卷</button>';
   } else {
     var ps = s.participants || [];
     var tabs = '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">' +
@@ -10215,6 +10443,7 @@ function finishPaperDesign() {
   saveData('sheets', state.sheets);
   _paper._saved = true;
   postSheetToChat(sheet);
+  (sheet.participants || []).forEach(function(cid) { generateCharSheetAnswers(sheet, cid); });
   closeSheetPaper();
   openSheetsHub();
   showToast('📋 答卷已创建' + (saveFixed ? '（已存为固定问卷）' : ''));
@@ -10239,6 +10468,7 @@ function startDeploy() {
     saveData('sheets', state.sheets);
     _paper._saved = true;
     postSheetToChat(sheet);
+    (sheet.participants || []).forEach(function(cid) { generateCharSheetAnswers(sheet, cid); });
     closeSheetPaper();
     openSheetPaper(sheet, 'answer', {});
   }
@@ -10306,6 +10536,9 @@ function generateCharSheetAnswers(sheet, charId) {
   if (!charId) return;
   sheet.charDone = sheet.charDone || {};
   if (sheet.charDone[charId]) return;
+  sheet._answering = sheet._answering || {};
+  if (sheet._answering[charId]) return; // 已在作答中，避免重复启动
+  sheet._answering[charId] = true;
   sheet.charAnswers = sheet.charAnswers || {};
   var ans = sheet.charAnswers[charId] = sheet.charAnswers[charId] || {};
   sheet.questions.forEach(function(q) {
@@ -10319,13 +10552,17 @@ function generateCharSheetAnswers(sheet, charId) {
     if (idx >= openQs.length) { _finishCharAnswer(sheet, charId); return; }
     var q = openQs[idx++];
     _charAnswerOpen(q, charId, sheet).then(function(a) {
-      ans[q.id] = a;
-      saveData('sheets', state.sheets);
-      if (_paper && _paper.sheet === sheet) renderSheetPaper();
-      next();
+      // 按答案长度模拟"思考"，答案越长想得越久
+      var wait = _charAnswerThinkMs(a);
+      setTimeout(function() {
+        ans[q.id] = a;
+        saveData('sheets', state.sheets);
+        if (_paper && _paper.sheet === sheet) renderSheetPaper();
+        next();
+      }, wait);
     });
   }
-  setTimeout(next, 800 + Math.random() * 1500);
+  setTimeout(next, 600 + Math.random() * 1200);
 }
 // 梦角答完：标记完成 + 记录"看过你的答卷" + 小概率留一句感想
 function _finishCharAnswer(sheet, charId) {
@@ -10366,7 +10603,8 @@ function _charAnswerOpen(q, charId, sheet) {
     var ch = getCharacter(charId);
     var nm = ch ? ch.name : '梦角';
     if (useAi) {
-      var persona = (ch && ch.persona) ? ch.persona : '';
+      // 人设优先；人设为空则用 AI 观察笔记
+      var persona = (ch && ch.persona) ? ch.persona : ((ch && ch.aiNotes) ? ch.aiNotes : '');
       var conv = state.conversations['conv_' + charId];
       var recent = '';
       if (conv && conv.messages) {
@@ -10376,10 +10614,12 @@ function _charAnswerOpen(q, charId, sheet) {
           return who + '：' + txt;
         }).join('\n');
       }
-      var sys = '你是「' + nm + '」，正在和用户一起做一份答卷。请完全以自己的性格和立场回答，' +
-        '不要一味附和用户，可以有自己的真实想法甚至不同意见。回答要简短自然（一般不超过40字），只输出答案本身，不要解释。' +
-        (persona ? '\n你的人设：' + persona : '') +
-        (recent ? '\n最近的聊天片段（供参考语气，不要照抄）：\n' + recent : '');
+      // 明确禁止"偷看用户答案"：梦角独立作答，不猜、不迎合
+      var sys = '你是「' + nm + '」，正在独立完成一份和用户的共同答卷。' +
+        '重要：你不知道用户会怎么答，也看不到用户的答案，请完全凭自己的性格、经历和真实想法回答，不要猜测或迎合用户。' +
+        '保持你的人设不崩；若题目与人设冲突，以人设为准。回答要简短自然（一般不超过40字），只输出答案本身，不要解释。' +
+        (persona ? '\n你的性格/人设：' + persona : '') +
+        (recent ? '\n最近的聊天片段（仅供参考语气，不要照抄，更不要用来猜用户会怎么答）：\n' + recent : '');
       fetch('https://api.deepseek.com/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
@@ -10400,6 +10640,11 @@ function _charAnswerOpen(q, charId, sheet) {
     }
   });
 }
+// 思考耗时：答案越长思考越久，更像真人（而不是秒答几个字）
+function _charAnswerThinkMs(text) {
+  var n = (text || '').length;
+  return 1200 + n * 45 + Math.random() * 900;
+}
 
 // ---------- 聊天入口 ----------
 function postSheetToChat(sheet) {
@@ -10418,43 +10663,100 @@ function openSheetFromChat(id) {
 }
 
 // ---------- 梦角主动发起（惊喜感） ----------
-function charInitiatedSheet(charId, convId) {
-  var nm = charNameOf(charId);
-  var fromTemplate = Math.random() < 0.6 && SHEET_TEMPLATES.length > 0;
-  var questions, title;
-  if (fromTemplate) {
-    var t = SHEET_TEMPLATES[Math.floor(Math.random() * SHEET_TEMPLATES.length)];
-    title = t.title;
-    questions = JSON.parse(JSON.stringify(t.questions));
-  } else {
-    var pool = [
-      { type: 'single', text: '如果可以瞬间掌握一项技能，你选？', options: ['厨艺', '乐器', '外语', '编程', '画画'] },
-      { type: 'single', text: '你更愿意做早起的鸟还是熬夜的猫？', options: ['早起鸟', '熬夜猫', '看情况', '都想做'] },
-      { type: 'fill', text: '最近让你嘴角上扬的一件小事：' },
-      { type: 'single', text: '旅行时你更喜欢？', options: ['做详细攻略', '随性乱逛', '睡到自然醒', '打卡所有景点'] },
-      { type: 'short', text: '用一种天气形容你今天的状态：' },
-      { type: 'multi', text: '哪些瞬间让你觉得被爱着？（多选）', options: ['被人记住喜好', '主动报备行踪', '耐心听我废话', '默默准备好一切', '吵架先低头'] },
-      { type: 'single', text: '收到惊喜时你的第一反应？', options: ['尖叫开心', '害羞脸红', '假装淡定', '反手回赠'] },
-      { type: 'fill', text: '你名字里你最喜欢的一个字是？' }
-    ];
-    var count = 4 + Math.floor(Math.random() * 3);
-    var shuffled = pool.slice().sort(function() { return Math.random() - 0.5; });
-    questions = shuffled.slice(0, count).map(function(q, i) { var c = JSON.parse(JSON.stringify(q)); c.id = 'q' + (i + 1); return c; });
-    title = nm + '的小提问';
+// 频率控制：每天最多1次、需聊过几句、可关闭
+function _autoSheetAllowed(charId) {
+  if (state.settings.autoSheet === false) return false;
+  var conv = state.conversations['conv_' + charId];
+  var n = (conv && conv.messages) ? conv.messages.length : 0;
+  if (n < 8) return false;
+  var today = new Date().toDateString(), last = '';
+  try { last = localStorage.getItem('milk_autosheet_day') || ''; } catch (e) {}
+  if (last === today) return false;
+  return true;
+}
+function _markAutoSheet() { try { localStorage.setItem('milk_autosheet_day', new Date().toDateString()); } catch (e) {} }
+// AI 结合人设+近期聊天，现编一份贴合你们关系的问卷（失败返回 null）
+function generateAiSheetQuestions(charId, cb) {
+  var ch = getCharacter(charId), key = getDeepSeekKey();
+  if (!ch || !key || !keyMasterAllows()) { cb(null); return; }
+  var persona = ch.persona || ch.aiNotes || '';
+  var conv = state.conversations['conv_' + charId], recent = '';
+  if (conv && conv.messages) {
+    recent = conv.messages.slice(-20).map(function(m) {
+      var who = m.from === 'me' ? '用户' : ch.name;
+      return who + '：' + (m.text || '').replace(/<[^>]+>/g, '').substring(0, 40);
+    }).join('\n');
   }
-  questions.forEach(function(q, i) { if (!q.id) q.id = 'q' + (i + 1); });
-  var sheet = {
-    id: sheetUid(), title: title, participants: [charId], questions: questions,
-    myAnswers: {}, myDone: false, charAnswers: {}, charDone: {},
-    viewCounts: { charViewedMySheet: 0, iViewedCharSheet: {} }, myNotes: {}, charNotes: {},
-    templateId: null, oneTime: true, createdAt: nowISO(), updatedAt: nowISO()
-  };
-  state.sheets.push(sheet);
-  saveData('sheets', state.sheets);
-  generateCharSheetAnswers(sheet, charId);
-  var msg = '📋 ' + nm + '悄悄准备了一份小答卷《' + title + '》\n自己已经先答完啦，就等你了~\n' +
-    '<span style="display:inline-block;margin-top:4px;padding:5px 12px;border-radius:8px;background:var(--primary);color:#fff;cursor:pointer;font-size:.9em" onclick="openSheetFromChat(' + sheet.id + ')">✍️ 现在作答</span>';
-  addMessage(charId, msg, false, null, convId);
+  var sys = '你是「' + ch.name + '」。请基于你的性格、和用户的近期聊天，出一份你想和用户一起做的小答卷（4~6题）。' +
+    '只输出一个JSON数组，元素形如 {"type":"single","text":"题干","options":["甲","乙","丙"]}；' +
+    'type可选 single(单选,需options,2~4个)、multi(多选,需options)、fill(填空,无options)、short(简答,无options)。' +
+    '题目要贴合你们的关系、自然、带点小惊喜，不要说教、不要暴露你在出题。' +
+    (persona ? '\n你的性格：' + persona : '') + (recent ? '\n近期聊天：\n' + recent : '');
+  fetch('https://api.deepseek.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+    body: JSON.stringify({ model: 'deepseek-chat', messages: [{ role: 'system', content: sys }, { role: 'user', content: '请出题。' }], max_tokens: 600 })
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    var raw = ((data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '');
+    var arr = null;
+    try { var m = raw.match(/\[[\s\S]*\]/); if (m) arr = JSON.parse(m[0]); } catch (e) {}
+    if (!arr || !arr.length) { cb(null); return; }
+    var types = ['single', 'multi', 'fill', 'short'];
+    var out = arr.slice(0, 6).map(function(q) {
+      return { type: types.indexOf(q.type) >= 0 ? q.type : 'single', text: (q.text || '').slice(0, 90), options: (q.options || []).slice(0, 5).filter(function(o) { return o; }) };
+    }).filter(function(q) { return q.text && (q.type === 'fill' || q.type === 'short' || q.options.length >= 2); });
+    cb(out.length >= 2 ? out : null);
+  }).catch(function() { cb(null); });
+}
+function charInitiatedSheet(charId, convId) {
+  if (!_autoSheetAllowed(charId)) return;
+  var nm = charNameOf(charId);
+  _markAutoSheet();
+  var useAi = Math.random() < 0.4 && getDeepSeekKey() && keyMasterAllows();
+  function build(questions, title) {
+    questions.forEach(function(q, i) { if (!q.id) q.id = 'q' + (i + 1); });
+    var sheet = {
+      id: sheetUid(), title: title, participants: [charId], questions: questions,
+      myAnswers: {}, myDone: false, charAnswers: {}, charDone: {},
+      viewCounts: { charViewedMySheet: 0, iViewedCharSheet: {} }, myNotes: {}, charNotes: {},
+      templateId: null, oneTime: true, createdAt: nowISO(), updatedAt: nowISO()
+    };
+    state.sheets.push(sheet);
+    saveData('sheets', state.sheets);
+    generateCharSheetAnswers(sheet, charId);
+    var msg = '📋 ' + nm + '悄悄准备了一份小答卷《' + title + '》\n我们一起来答吧！各自作答，答完再对答案~\n' +
+      '<span style="display:inline-block;margin-top:4px;padding:5px 12px;border-radius:8px;background:var(--primary);color:#fff;cursor:pointer;font-size:.9em" onclick="openSheetFromChat(' + sheet.id + ')">✍️ 一起作答</span>';
+    addMessage(charId, msg, false, null, convId);
+  }
+  function fromBank() {
+    var fromTemplate = Math.random() < 0.6 && SHEET_TEMPLATES.length > 0;
+    var questions, title;
+    if (fromTemplate) {
+      var t = SHEET_TEMPLATES[Math.floor(Math.random() * SHEET_TEMPLATES.length)];
+      title = t.title; questions = JSON.parse(JSON.stringify(t.questions));
+    } else {
+      var pool = [
+        { type: 'single', text: '如果可以瞬间掌握一项技能，你选？', options: ['厨艺', '乐器', '外语', '编程', '画画'] },
+        { type: 'single', text: '你更愿意做早起的鸟还是熬夜的猫？', options: ['早起鸟', '熬夜猫', '看情况', '都想做'] },
+        { type: 'fill', text: '最近让你嘴角上扬的一件小事：' },
+        { type: 'single', text: '旅行时你更喜欢？', options: ['做详细攻略', '随性乱逛', '睡到自然醒', '打卡所有景点'] },
+        { type: 'short', text: '用一种天气形容你今天的状态：' },
+        { type: 'multi', text: '哪些瞬间让你觉得被爱着？（多选）', options: ['被人记住喜好', '主动报备行踪', '耐心听我废话', '默默准备好一切', '吵架先低头'] },
+        { type: 'single', text: '收到惊喜时你的第一反应？', options: ['尖叫开心', '害羞脸红', '假装淡定', '反手回赠'] },
+        { type: 'fill', text: '你名字里你最喜欢的一个字是？' }
+      ];
+      var count = 4 + Math.floor(Math.random() * 3);
+      var shuffled = pool.slice().sort(function() { return Math.random() - 0.5; });
+      questions = shuffled.slice(0, count);
+      title = nm + '的小提问';
+    }
+    build(questions, title);
+  }
+  if (useAi) {
+    generateAiSheetQuestions(charId, function(qs) { if (qs) build(qs, nm + '悄悄想问你的'); else fromBank(); });
+  } else {
+    fromBank();
+  }
 }
 
 // ---------- 导入：JSON ----------
@@ -11334,6 +11636,7 @@ function applyCustomTheme() {
   state.settings.inputBgColor = ib;
   state.settings.sidebarBgColor = sb;
   saveData('settings', state.settings);
+  try { applyBubbleGlass(); } catch(e) {}
 }
 
 // ========== CATEGORY SEARCH (add cards to category) ==========
