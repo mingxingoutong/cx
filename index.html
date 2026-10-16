@@ -9550,14 +9550,27 @@ function interpretTarot() {
   showToast('🔮 ' + (currentLang==='zh'?'重新解读完成':'Re-interpretation complete'));
 }
 
+function _tarotTime(r) {
+  var t = 0;
+  if (r && r.date) { try { t = new Date(r.date).getTime() || 0; } catch (e) { t = 0; } }
+  if (!t && r && typeof r.id === 'number') t = r.id;   // 兜底：id 就是 Date.now()
+  return t || 0;
+}
+
 function renderTarotRecords() {
   const el = document.getElementById('tarotRecords');
   if (!state.tarotRecords || state.tarotRecords.length === 0) {
     el.innerHTML = `<div class="empty-state"><div class="icon">🔮</div><p>${currentLang==='zh'?'暂无占卜记录':'No records yet'}</p></div>`;
     return;
   }
-  el.innerHTML = [...state.tarotRecords].reverse().map((r, i) => {
-    const idx = state.tarotRecords.length - 1 - i;
+  // 按【占卜发生的时间】排序（新的在上），而不是按"什么时候被存进来"的顺序。
+  // 云同步会把另一台/云端的旧记录并进来，它们会被追加到数组末尾；若按插入顺序倒排，
+  // 旧记录就会突然冒到最上面、日期看着像乱的（"新蹦出来的却是 14 号"）。
+  // idx 仍是它在 state.tarotRecords 里的真实下标，点开详情不受影响。
+  const order = state.tarotRecords.map(function(_, i) { return i; })
+    .sort(function(a, b) { return _tarotTime(state.tarotRecords[b]) - _tarotTime(state.tarotRecords[a]); });
+  el.innerHTML = order.map((idx) => {
+    const r = state.tarotRecords[idx];
     const date = new Date(r.date).toLocaleString();
     const isCharRec = r.by === 'char';
     const who = isCharRec ? ((getCharacter(r.charId) || {}).name || '梦角') : '我';
