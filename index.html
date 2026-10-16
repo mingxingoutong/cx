@@ -8525,25 +8525,55 @@ function gistSyncNow(silent) {
     var had = 0;
     var before = _syncItemCount();
     var f = g && g.files && g.files[GIST_FILE];
-    if (f && f.content) {
-      try { mergeConfigData(JSON.parse(f.content)); had = 1; }
-      catch (e) { _gistStatus('⚠️ 云端文件读不出，已跳过合并，只上传本机'); }
+    var cloudSize = (f && f.size) ? f.size : 0;
+    // 云端「有数据但读不全」是个隐蔽坑：单个文件超过 1MB 时 GitHub 只回前 1MB
+    // （truncated:true），有的情况直接回空串。表情包是 base64 图片、字卡一多就容易超。
+    // 这时直接 JSON.parse 必失败 → 会被误判成"云端是空的"，字卡表情全部合并不了，
+    // 于是每台设备都在各传各的、谁也拿不到对方的。改走 raw_url 拉完整原文。
+    var readCloud;
+    if (!f || (!f.content && !f.raw_url)) {
+      readCloud = Promise.resolve({ txt: '', mode: 'empty' });   // 云端确实没东西
+    } else {
+      var inlineOK = false;
+      if (f.content && !f.truncated) { try { JSON.parse(f.content); inlineOK = true; } catch (e) {} }
+      if (inlineOK) {
+        readCloud = Promise.resolve({ txt: f.content, mode: 'inline' });
+      } else if (f.raw_url) {
+        readCloud = _fetchTimeout(f.raw_url, { cache: 'no-store' }, 60000)
+          .then(function(r) { return r.ok ? r.text() : ''; })
+          .then(function(t) { return { txt: t, mode: 'raw' }; })
+          .catch(function() { return { txt: '', mode: 'rawfail' }; });
+      } else {
+        readCloud = Promise.resolve({ txt: '', mode: 'empty' });
+      }
     }
-    var added = Math.max(0, _syncItemCount() - before);
-    return _fetchTimeout(GIST_API + '/' + encodeURIComponent(c.gid), {
-      method: 'PATCH',
-      headers: _gistHeaders(c.tok),
-      body: JSON.stringify({ files: _gistFile(collectConfigData(false)) })
-    }, 60000).then(function(r) {
-      if (!r.ok) return r.text().then(function(t) { throw new Error(_gistErr(r.status, null, t)); });
-      return { had: had, added: added };
+    return readCloud.then(function(rd) {
+      if (rd.txt) {
+        try { mergeConfigData(JSON.parse(rd.txt)); had = 1; }
+        catch (e) { _gistStatus('⚠️ 云端文件读不出，已跳过合并，只上传本机'); }
+      }
+      var added = Math.max(0, _syncItemCount() - before);
+      return _fetchTimeout(GIST_API + '/' + encodeURIComponent(c.gid), {
+        method: 'PATCH',
+        headers: _gistHeaders(c.tok),
+        body: JSON.stringify({ files: _gistFile(collectConfigData(false)) })
+      }, 60000).then(function(r) {
+        if (!r.ok) return r.text().then(function(t) { throw new Error(_gistErr(r.status, null, t)); });
+        return { had: had, added: added, mode: rd.mode, size: cloudSize };
+      });
     });
   }).then(function(res) {
     refreshCloudViews();
     var secs = ((Date.now() - t0) / 1000).toFixed(1);
     var msg = '同步完成（' + secs + 's）';
-    if (res.had) msg += (res.added > 0 ? '，新增 ' + res.added + ' 项，已合并' : '，无新增，数据一致');
-    else msg += '，云端是空的，已上传本机';
+    if (res.had) {
+      msg += (res.added > 0 ? '，新增 ' + res.added + ' 项，已合并' : '，无新增，数据一致');
+      if (res.mode === 'raw') msg += '（云端文件 ' + (res.size / 1024 / 1024).toFixed(1) + 'MB 较大，已走备用通道读全）';
+    } else if (res.mode === 'empty') {
+      msg += '，云端是空的，已上传本机';
+    } else {
+      msg += '，⚠️ 云端【有数据但读不出来】，只上传了本机 —— 另一边这样是拿不到的';
+    }
     _gistStatus('✅ ' + msg);
     if (!silent) showToast('🔄 ' + msg);
   }).catch(function(e) {
