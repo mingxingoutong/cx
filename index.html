@@ -8548,18 +8548,28 @@ function gistSyncNow(silent) {
       }
     }
     return readCloud.then(function(rd) {
+      // 【重要】云端有数据却读不出来时，绝对不能上传。
+      // 一旦 PATCH，本机数据会把对方那一整份覆盖掉 —— 两台设备就这样互相冲掉、
+      // 永远同步不齐（表现为"内容多的那台点同步，另一边还是少的那份"）。
+      // 宁可这次不成功，也不能毁掉对方的数据。
+      if (!rd.txt && rd.mode !== 'empty') {
+        throw new Error('云端有数据但读不出来 —— 为避免覆盖掉对方的数据，本次【没有】上传本机。请稍后重试');
+      }
       if (rd.txt) {
         try { mergeConfigData(JSON.parse(rd.txt)); had = 1; }
-        catch (e) { _gistStatus('⚠️ 云端文件读不出，已跳过合并，只上传本机'); }
+        catch (e) { throw new Error('云端文件损坏，无法合并 —— 为避免覆盖掉对方的数据，本次【没有】上传本机'); }
       }
       var added = Math.max(0, _syncItemCount() - before);
+      var payload = collectConfigData(false);
+      var upSize = 0;
+      try { upSize = new Blob([JSON.stringify(payload)]).size; } catch (e) { upSize = 0; }
       return _fetchTimeout(GIST_API + '/' + encodeURIComponent(c.gid), {
         method: 'PATCH',
         headers: _gistHeaders(c.tok),
-        body: JSON.stringify({ files: _gistFile(collectConfigData(false)) })
+        body: JSON.stringify({ files: _gistFile(payload) })
       }, 60000).then(function(r) {
         if (!r.ok) return r.text().then(function(t) { throw new Error(_gistErr(r.status, null, t)); });
-        return { had: had, added: added, mode: rd.mode, size: cloudSize };
+        return { had: had, added: added, mode: rd.mode, size: cloudSize, up: upSize };
       });
     });
   }).then(function(res) {
@@ -8569,10 +8579,12 @@ function gistSyncNow(silent) {
     if (res.had) {
       msg += (res.added > 0 ? '，新增 ' + res.added + ' 项，已合并' : '，无新增，数据一致');
       if (res.mode === 'raw') msg += '（云端文件 ' + (res.size / 1024 / 1024).toFixed(1) + 'MB 较大，已走备用通道读全）';
-    } else if (res.mode === 'empty') {
-      msg += '，云端是空的，已上传本机';
     } else {
-      msg += '，⚠️ 云端【有数据但读不出来】，只上传了本机 —— 另一边这样是拿不到的';
+      msg += '，云端是空的，已上传本机';
+    }
+    if (res.up) {
+      msg += '，本机数据 ' + (res.up >= 1048576 ? (res.up / 1024 / 1024).toFixed(1) + 'MB' : Math.round(res.up / 1024) + 'KB');
+      if (res.up > 950000) msg += '（偏大，同步会慢一些）';
     }
     _gistStatus('✅ ' + msg);
     if (!silent) showToast('🔄 ' + msg);

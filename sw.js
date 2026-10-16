@@ -1,6 +1,6 @@
 self.addEventListener('install', function (e) {
   e.waitUntil(
-    caches.open('chuanxun-v6').then(function (c) {
+    caches.open('chuanxun-v7').then(function (c) {
       return c.addAll(['./index.html', './manifest.json', './icon-192.png?v=4', './icon-512.png?v=4']);
     })
   );
@@ -10,7 +10,7 @@ self.addEventListener('install', function (e) {
 self.addEventListener('activate', function (e) {
   e.waitUntil(
     caches.keys().then(function (keys) {
-      return Promise.all(keys.filter(function (k) { return k !== 'chuanxun-v6'; }).map(function (k) { return caches.delete(k); }));
+      return Promise.all(keys.filter(function (k) { return k !== 'chuanxun-v7'; }).map(function (k) { return caches.delete(k); }));
     }).then(function () { return self.clients.claim(); })
   );
 });
@@ -21,7 +21,7 @@ self.addEventListener('fetch', function (e) {
     fetch(e.request).then(function (res) {
       if (res && res.ok) {
         var copy = res.clone();
-        caches.open('chuanxun-v6').then(function (c) { return c.put(e.request, copy); });
+        caches.open('chuanxun-v7').then(function (c) { return c.put(e.request, copy); });
       }
       return res;
     }).catch(function () {
